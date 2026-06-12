@@ -42,6 +42,27 @@ unsigned long lastUpdate = 0;
 String inputWeight = "";
 int targetWeight = 0;
 
+// ---------------- Display Time Function ----------------
+void displayTimeOnLCD() {
+
+  lcd.setCursor(0, 3);
+
+  if (hours < 10) lcd.print("0");
+  lcd.print(hours);
+
+  lcd.print(":");
+
+  if (minutes < 10) lcd.print("0");
+  lcd.print(minutes);
+
+  lcd.print(":");
+
+  if (seconds < 10) lcd.print("0");
+  lcd.print(seconds);
+
+  lcd.print("        ");
+}
+
 void setup() {
 
   Serial.begin(115200);
@@ -237,23 +258,3 @@ void loop() {
   }
 }
 
-// ---------------- Display Time Function ----------------
-void displayTimeOnLCD() {
-
-  lcd.setCursor(0, 3);
-
-  if (hours < 10) lcd.print("0");
-  lcd.print(hours);
-
-  lcd.print(":");
-
-  if (minutes < 10) lcd.print("0");
-  lcd.print(minutes);
-
-  lcd.print(":");
-
-  if (seconds < 10) lcd.print("0");
-  lcd.print(seconds);
-
-  lcd.print("        ");
-}
