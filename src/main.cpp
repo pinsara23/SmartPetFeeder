@@ -41,9 +41,33 @@ unsigned long lastUpdate = 0;
 // ---------------- Weight Variables ----------------
 String inputWeight = "";
 int targetWeight = 0;
+float currentWeightDisplay = 0.0;
+
+// ---------------- Feeding Time Variables ----------------
+// State machine for menu navigation
+enum MenuState {
+  DEFAULT_SCREEN, // Main default dashboard
+  INPUTS_MENU,    // Show "A: Set Weight, B: Set Time"
+  WEIGHT_INPUT,   // Entering weight (numbers + # to confirm)
+  TIME_SLOT_1,    // Entering first feeding time (HHMM + # to confirm)
+  TIME_SLOT_2     // Entering second feeding time (HHMM + # to confirm)
+};
+
+MenuState currentState = DEFAULT_SCREEN;
+
+// Feeding time slots (stored as minutes from midnight for easy comparison)
+int feedTime1 = -1;  // -1 means not set
+int feedTime2 = -1;  // -1 means not set
+
+// Temporary variables for time input
+String inputTime = "";
+int timeInputStage = 0;  // 0 = entering hours, 1 = entering minutes
+int tempHours = 0;
+int tempMinutes = 0;
 
 // ---------------- Display Time Function ----------------
 void displayTimeOnLCD() {
+  if (currentState == DEFAULT_SCREEN) return;
 
   lcd.setCursor(0, 3);
 
@@ -61,6 +85,162 @@ void displayTimeOnLCD() {
   lcd.print(seconds);
 
   lcd.print("        ");
+}
+
+void updateDefaultScreen(float currentWeight) {
+  // Row 0
+  lcd.setCursor(0, 0);
+  lcd.print("TW:");
+  lcd.print(targetWeight);
+  lcd.print("g    "); // Clear old digits
+
+  lcd.setCursor(10, 0);
+  lcd.print("CW:");
+  lcd.print(currentWeight, 1);
+  lcd.print("g    "); // Clear old digits
+
+  // Row 1
+  lcd.setCursor(0, 1);
+  lcd.print("F1:");
+  if (feedTime1 >= 0) {
+    if (feedTime1 / 60 < 10) lcd.print("0");
+    lcd.print(feedTime1 / 60);
+    lcd.print(":");
+    if (feedTime1 % 60 < 10) lcd.print("0");
+    lcd.print(feedTime1 % 60);
+  } else {
+    lcd.print("--:--");
+  }
+  lcd.print("  ");
+
+  lcd.setCursor(10, 1);
+  lcd.print("F2:");
+  if (feedTime2 >= 0) {
+    if (feedTime2 / 60 < 10) lcd.print("0");
+    lcd.print(feedTime2 / 60);
+    lcd.print(":");
+    if (feedTime2 % 60 < 10) lcd.print("0");
+    lcd.print(feedTime2 % 60);
+  } else {
+    lcd.print("--:--");
+  }
+  lcd.print("  ");
+
+  // Row 2
+  lcd.setCursor(0, 2);
+  lcd.print("Time: ");
+  if (hours < 10) lcd.print("0"); lcd.print(hours); lcd.print(":");
+  if (minutes < 10) lcd.print("0"); lcd.print(minutes); lcd.print(":");
+  if (seconds < 10) lcd.print("0"); lcd.print(seconds);
+  lcd.print("      ");
+
+  // Row 3
+  lcd.setCursor(0, 3);
+  if (targetWeight > 0 && currentWeight > targetWeight) {
+    lcd.print("OVERLOAD! Press C   ");
+  } else {
+    lcd.print("Press C for inputs  ");
+  }
+}
+
+// ---------------- Helper Functions ----------------
+void showDefaultScreen() {
+  updateDefaultScreen(currentWeightDisplay);
+}
+
+void showInputsMenu() {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("A: Set Weight");
+  lcd.setCursor(0, 1);
+  lcd.print("B: Set Feed Times");
+  lcd.setCursor(0, 2);
+  lcd.print("C: Back  *: Reset");
+  lcd.setCursor(0, 3);
+  displayTimeOnLCD();
+}
+
+void showWeightInput() {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Enter Weight (g):");
+  lcd.setCursor(0, 1);
+  lcd.print("Input: ");
+  lcd.print(inputWeight);
+  lcd.print("g      ");
+  lcd.setCursor(0, 2);
+  lcd.print("Press # to confirm");
+  lcd.setCursor(0, 3);
+  displayTimeOnLCD();
+}
+
+void showTimeInput(int slot) {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Feed Time ");
+  lcd.print(slot);
+  lcd.print(" (HHMM):");
+  lcd.setCursor(0, 1);
+  lcd.print("Input: ");
+  lcd.print(inputTime);
+  lcd.print("      ");
+  lcd.setCursor(0, 2);
+  lcd.print("Press # to confirm");
+  lcd.setCursor(0, 3);
+  displayTimeOnLCD();
+}
+
+void showTimeConfirmed(int slot, int h, int m) {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Feed Time ");
+  lcd.print(slot);
+  lcd.print(" Set!");
+  lcd.setCursor(0, 1);
+  if (h < 10) lcd.print("0");
+  lcd.print(h);
+  lcd.print(":");
+  if (m < 10) lcd.print("0");
+  lcd.print(m);
+  lcd.setCursor(0, 3);
+  displayTimeOnLCD();
+  delay(1500);
+}
+
+void resetAll() {
+  inputWeight = "";
+  targetWeight = 0;
+  feedTime1 = -1;
+  feedTime2 = -1;
+  inputTime = "";
+  timeInputStage = 0;
+  tempHours = 0;
+  tempMinutes = 0;
+  currentState = DEFAULT_SCREEN;
+  
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("System Reset!");
+  lcd.setCursor(0, 1);
+  lcd.print("All values cleared");
+  delay(1500);
+  showDefaultScreen();
+}
+
+void checkFeedingTime() {
+  int currentMinutes = hours * 60 + minutes;
+  
+  if (feedTime1 >= 0 && currentMinutes == feedTime1) {
+    lcd.setCursor(0, 0);
+    lcd.print("FEED TIME 1!      ");
+    Serial.println("FEED TIME 1 TRIGGERED!");
+  }
+  
+  if (feedTime2 >= 0 && currentMinutes == feedTime2) {
+    lcd.setCursor(0, 0);
+    lcd.print("FEED TIME 2!      ");
+    Serial.println("FEED TIME 2 TRIGGERED!");
+  }
 }
 
 void setup() {
@@ -81,105 +261,144 @@ void setup() {
 
   delay(1000);
 
-  lcd.clear();
-
-  lcd.setCursor(0, 0);
-  lcd.print("Press A");
-
-  lcd.setCursor(0,1);
-  lcd.print("to enter the weight");
-  
+  showDefaultScreen();
 }
 
 void loop() {
-
   // ---------------- KEYPAD HANDLING ----------------
   char key = customKeypad.getKey();
 
   if (key) {
-
-    // ---------- Number Input ----------
-    if (key >= '0' && key <= '9') {
-
-      // Allow max 4 digits
-      if (inputWeight.length() < 4) {
-        inputWeight += key;
-      }
-
-      lcd.setCursor(0, 1);
-      lcd.print("Input: ");
-      lcd.print(inputWeight);
-      lcd.print("g      ");
+    // Handle * (reset) in any state
+    if (key == '*') {
+      resetAll();
+      return;
     }
 
-    // ---------- Confirm Weight ----------
-    else if (key == '#') {
+    // State machine for different modes
+    switch (currentState) {
+      case DEFAULT_SCREEN:
+        if (key == 'C') {
+          currentState = INPUTS_MENU;
+          showInputsMenu();
+        }
+        break;
 
-      int value = inputWeight.toInt();
+      case INPUTS_MENU:
+        if (key == 'A') {
+          currentState = WEIGHT_INPUT;
+          inputWeight = "";
+          showWeightInput();
+        }
+        else if (key == 'B') {
+          currentState = TIME_SLOT_1;
+          inputTime = "";
+          timeInputStage = 0;
+          tempHours = 0;
+          tempMinutes = 0;
+          showTimeInput(1);
+        }
+        else if (key == 'C') {
+          currentState = DEFAULT_SCREEN;
+          showDefaultScreen();
+        }
+        break;
 
-      // Allow only 1g - 1000g
-      if (value >= 1 && value <= 1000) {
+      case WEIGHT_INPUT:
+        if (key >= '0' && key <= '9') {
+          if (inputWeight.length() < 4) {
+            inputWeight += key;
+          }
+          lcd.setCursor(0, 1);
+          lcd.print("Input: ");
+          lcd.print(inputWeight);
+          lcd.print("g      ");
+        }
+        else if (key == '#') {
+          int value = inputWeight.toInt();
+          if (value >= 1 && value <= 1000) {
+            targetWeight = value;
+            lcd.setCursor(0, 1);
+            lcd.print("Target: ");
+            lcd.print(targetWeight);
+            lcd.print("g      ");
+            Serial.print("Target Weight Set: ");
+            Serial.println(targetWeight);
+            delay(1500);
+          }
+          else {
+            lcd.setCursor(0, 1);
+            lcd.print("Invalid Range!    ");
+            delay(1500);
+          }
+          inputWeight = "";
+          currentState = DEFAULT_SCREEN;
+          showDefaultScreen();
+        }
+        break;
 
-        targetWeight = value;
-
-        lcd.setCursor(0, 1);
-        lcd.print("Target: ");
-        lcd.print(targetWeight);
-        lcd.print("g      ");
-
-        Serial.print("Target Weight Set: ");
-        Serial.println(targetWeight);
-      }
-      else {
-
-        lcd.setCursor(0, 1);
-        lcd.print("Invalid Range!    ");
-
-        delay(1500);
-
-        lcd.setCursor(0, 1);
-        lcd.print("                    ");
-      }
-
-      inputWeight = "";
-    }
-
-    // ---------- Reset using * ----------
-    else if (key == '*') {
-
-      // Reset values
-      inputWeight = "";
-      targetWeight = 0;
-
-      lcd.setCursor(0, 1);
-      lcd.print("Weight Reset      ");
-
-      lcd.setCursor(0, 2);
-      lcd.print("W:0g RESET        ");
-
-      lcd.setCursor(0, 0);
-      lcd.print("System Reset      ");
-
-      Serial.println("Target Weight Reset!");
-
-      delay(1500);
-
-      lcd.clear();
-
-      lcd.setCursor(0, 0);
-      lcd.print("Enter Weight(g):");
+      case TIME_SLOT_1:
+      case TIME_SLOT_2:
+        if (key >= '0' && key <= '9') {
+          if (inputTime.length() < 4) {
+            inputTime += key;
+          }
+          lcd.setCursor(0, 1);
+          lcd.print("Input: ");
+          lcd.print(inputTime);
+          lcd.print("      ");
+        }
+        else if (key == '#') {
+          if (inputTime.length() == 4) {
+            int h = inputTime.substring(0, 2).toInt();
+            int m = inputTime.substring(2, 4).toInt();
+            
+            if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+              if (currentState == TIME_SLOT_1) {
+                feedTime1 = h * 60 + m;
+                showTimeConfirmed(1, h, m);
+                currentState = TIME_SLOT_2;
+                inputTime = "";
+                showTimeInput(2);
+              }
+              else {
+                feedTime2 = h * 60 + m;
+                showTimeConfirmed(2, h, m);
+                currentState = DEFAULT_SCREEN;
+                showDefaultScreen();
+              }
+            }
+            else {
+              lcd.setCursor(0, 1);
+              lcd.print("Invalid Time!     ");
+              delay(1500);
+              lcd.setCursor(0, 1);
+              lcd.print("Input: ");
+              lcd.print(inputTime);
+              lcd.print("      ");
+            }
+          }
+          else {
+            lcd.setCursor(0, 1);
+            lcd.print("Enter 4 digits!   ");
+            delay(1500);
+            lcd.setCursor(0, 1);
+            lcd.print("Input: ");
+            lcd.print(inputTime);
+            lcd.print("      ");
+          }
+          inputTime = "";
+        }
+        break;
     }
   }
 
   // ---------------- Calibration Control ----------------
   if (Serial.available()) {
-
     char temp = Serial.read();
-
     if (temp == '+') {
       calibration_factor += 10;
     }
-
     else if (temp == '-') {
       calibration_factor -= 10;
     }
@@ -187,22 +406,16 @@ void loop() {
 
   // ---------------- Update Every 1 Second ----------------
   if (millis() - lastUpdate >= 1000) {
-
     lastUpdate += 1000;
 
     // ---------- Time Counter ----------
     seconds++;
-
     if (seconds >= 60) {
-
       seconds = 0;
       minutes++;
-
       if (minutes >= 60) {
-
         minutes = 0;
         hours++;
-
         if (hours >= 24) {
           hours = 0;
         }
@@ -211,13 +424,11 @@ void loop() {
 
     // ---------- Read Weight ----------
     scale.set_scale(calibration_factor);
-
     float weight = scale.get_units(5);
-
-    // Remove negative tiny noise
     if (weight < 0) {
       weight = 0;
     }
+    currentWeightDisplay = weight;
 
     // ---------- Serial Output ----------
     Serial.print("Weight: ");
@@ -225,33 +436,16 @@ void loop() {
     Serial.print(" g | Target: ");
     Serial.println(targetWeight);
 
-    // ---------- LCD Weight Display ----------
-    lcd.setCursor(0, 2);
-
-    lcd.print("W:");
-    lcd.print(weight, 1);
-    lcd.print("g ");
-
-    // ---------- Overload Check ----------
-    if (targetWeight > 0 && weight > targetWeight) {
-
-      lcd.print("OVERLOAD!");
-
-      // Warning message
-      lcd.setCursor(0, 0);
-      lcd.print("WARNING EXCEEDED!");
-
-      Serial.println("WARNING: Weight Exceeded!");
+    // ---------- LCD Display Updates ----------
+    if (currentState == DEFAULT_SCREEN) {
+      updateDefaultScreen(weight);
+      if (targetWeight > 0 && weight > targetWeight) {
+        Serial.println("WARNING: Weight Exceeded!");
+      }
     }
 
-    else {
-
-      lcd.print("NORMAL     ");
-
-      // Restore heading
-      lcd.setCursor(0, 0);
-      lcd.print("Enter Weight(g):");
-    }
+    // ---------- Check Feeding Times ----------
+    checkFeedingTime();
 
     // ---------- Display Time ----------
     displayTimeOnLCD();

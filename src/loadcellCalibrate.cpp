@@ -1,64 +1,64 @@
-#include "HX711.h"
+// #include "HX711.h"
 
-#define DT 23
-#define SCK 26
+// #define DT 23
+// #define SCK 26
 
-HX711 scale;
+// HX711 scale;
 
-// starting value
-float calibration_factor = -1015;
+// // starting value
+// float calibration_factor = -1015;
 
-void setup() {
+// void setup() {
 
-  Serial.begin(115200);
+//   Serial.begin(115200);
 
-  scale.begin(DT, SCK);
+//   scale.begin(DT, SCK);
 
-  Serial.println();
-  Serial.println("HX711 Calibration");
-  Serial.println("-------------------");
+//   Serial.println();
+//   Serial.println("HX711 Calibration");
+//   Serial.println("-------------------");
 
-  Serial.println("Remove all weight from load cell");
-  delay(5000);
+//   Serial.println("Remove all weight from load cell");
+//   delay(5000);
 
-  // set current reading as zero
-  scale.tare();
+//   // set current reading as zero
+//   scale.tare();
 
-  Serial.println("Tare completed");
-  Serial.println("Now place known weight");
+//   Serial.println("Tare completed");
+//   Serial.println("Now place known weight");
 
-}
+// }
 
-void loop() {
+// void loop() {
 
-  // apply calibration factor
-  scale.set_scale(calibration_factor);
+//   // apply calibration factor
+//   scale.set_scale(calibration_factor);
 
-  // average 10 readings
-  float weight = scale.get_units(10);
+//   // average 10 readings
+//   float weight = scale.get_units(10);
 
-  Serial.print("Weight: ");
-  Serial.print(weight);
-  Serial.println(" g");
+//   Serial.print("Weight: ");
+//   Serial.print(weight);
+//   Serial.println(" g");
 
-  Serial.print("Calibration Factor: ");
-  Serial.println(calibration_factor);
+//   Serial.print("Calibration Factor: ");
+//   Serial.println(calibration_factor);
 
-  Serial.println("-------------------");
+//   Serial.println("-------------------");
 
-  delay(1000);
+//   delay(1000);
 
-  // adjust factor from serial monitor
-  if (Serial.available()) {
+//   // adjust factor from serial monitor
+//   if (Serial.available()) {
 
-    char temp = Serial.read();
+//     char temp = Serial.read();
 
-    if (temp == '+') {
-      calibration_factor += 10;
-    }
+//     if (temp == '+') {
+//       calibration_factor += 10;
+//     }
 
-    else if (temp == '-') {
-      calibration_factor -= 10;
-    }
-  }
-}
+//     else if (temp == '-') {
+//       calibration_factor -= 10;
+//     }
+//   }
+// }
