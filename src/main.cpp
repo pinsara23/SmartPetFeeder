@@ -2,6 +2,16 @@
 #include <LiquidCrystal_I2C.h>
 #include <Keypad.h>
 #include "HX711.h"
+#include <ESP32Servo.h>
+
+Servo foodContainerServo;
+
+const int foodContainerServoPin = 13;
+
+// ---------------- Servo Angles ----------------
+int servoOpenAngle = 90;
+int servoCloseAngle = 0;
+
 
 // ---------------- LCD Configuration ----------------
 LiquidCrystal_I2C lcd(0x27, 20, 4);
@@ -46,6 +56,7 @@ float currentWeightDisplay = 0.0;
 // ---------------- Feeding Time Variables ----------------
 // State machine for menu navigation
 enum MenuState {
+  INITIAL_TIME_SETUP, // Setup current time on boot
   DEFAULT_SCREEN, // Main default dashboard
   INPUTS_MENU,    // Show "A: Set Weight, B: Set Time"
   WEIGHT_INPUT,   // Entering weight (numbers + # to confirm)
@@ -53,7 +64,7 @@ enum MenuState {
   TIME_SLOT_2     // Entering second feeding time (HHMM + # to confirm)
 };
 
-MenuState currentState = DEFAULT_SCREEN;
+MenuState currentState = INITIAL_TIME_SETUP;
 
 // Feeding time slots (stored as minutes from midnight for easy comparison)
 int feedTime1 = -1;  // -1 means not set
@@ -67,7 +78,7 @@ int tempMinutes = 0;
 
 // ---------------- Display Time Function ----------------
 void displayTimeOnLCD() {
-  if (currentState == DEFAULT_SCREEN) return;
+  if (currentState == DEFAULT_SCREEN || currentState == INITIAL_TIME_SETUP) return;
 
   lcd.setCursor(0, 3);
 
@@ -144,6 +155,18 @@ void updateDefaultScreen(float currentWeight) {
 }
 
 // ---------------- Helper Functions ----------------
+void showInitialTimeSetup() {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Set Current Time:");
+  lcd.setCursor(0, 1);
+  lcd.print("HHMM: ");
+  lcd.print(inputTime);
+  lcd.print("      ");
+  lcd.setCursor(0, 3);
+  lcd.print("Press # to confirm");
+}
+
 void showDefaultScreen() {
   updateDefaultScreen(currentWeightDisplay);
 }
@@ -243,11 +266,68 @@ void checkFeedingTime() {
   }
 }
 
+// urgent
+void handleDispensing(float currentWeight) {
+  int currentMinutes = hours * 60 + minutes;
+  bool shouldDispense = false;
+  int targetAngle = servoCloseAngle;
+
+  // Check if within 2 hours (120 minutes) before feedTime1
+  if (feedTime1 >= 0) {
+    int diff1 = feedTime1 - currentMinutes;
+    if (diff1 < 0) diff1 += 24 * 60;
+    if (diff1 > 0 && diff1 <= 120) {
+      shouldDispense = true;
+    }
+  }
+  
+  // Check if within 2 hours (120 minutes) before feedTime2
+  if (feedTime2 >= 0) {
+    int diff2 = feedTime2 - currentMinutes;
+    if (diff2 < 0) diff2 += 24 * 60;
+    if (diff2 > 0 && diff2 <= 120) {
+      shouldDispense = true;
+    }
+  }
+
+  if (shouldDispense && targetWeight > 0) {
+    float diffWeight = targetWeight - currentWeight;
+    
+    if (diffWeight > 10.0) {
+      // Map remaining weight to servo angle. As weight rises, the angle approaches close.
+      if (targetWeight > 10) {
+        float proportion = (diffWeight - 10.0) / ((float)targetWeight - 10.0);
+        if (proportion > 1.0) proportion = 1.0;
+        if (proportion < 0.0) proportion = 0.0;
+        targetAngle = servoCloseAngle + (int)(proportion * (servoOpenAngle - servoCloseAngle));
+      } else {
+        targetAngle = servoOpenAngle;
+      }
+    } else {
+      // When 10g or less remaining, close completely
+      targetAngle = servoCloseAngle;
+    }
+  }
+
+  // Only update servo position when the angle changes to prevent jitter
+  static int currentServoAngle = -1;
+  if (targetAngle != currentServoAngle) {
+    foodContainerServo.write(targetAngle);
+    currentServoAngle = targetAngle;
+  }
+}
+
 void setup() {
 
   Serial.begin(115200);
 
   Wire.begin();
+
+  ESP32PWM::allocateTimer(0);
+  //servo attach
+  foodContainerServo.attach(foodContainerServoPin, 500, 2400); // Adjust pulse width range if needed
+  foodContainerServo.write(servoCloseAngle); // Initially closed
+
 
   // LCD Init
   lcd.init();
@@ -261,7 +341,8 @@ void setup() {
 
   delay(1000);
 
-  showDefaultScreen();
+  inputTime = "";
+  showInitialTimeSetup();
 }
 
 void loop() {
@@ -277,6 +358,58 @@ void loop() {
 
     // State machine for different modes
     switch (currentState) {
+      case INITIAL_TIME_SETUP:
+        if (key >= '0' && key <= '9') {
+          if (inputTime.length() < 4) {
+            inputTime += key;
+          }
+          lcd.setCursor(6, 1);
+          lcd.print(inputTime);
+          lcd.print("      ");
+        }
+        else if (key == '#') {
+          if (inputTime.length() == 4) {
+            int h = inputTime.substring(0, 2).toInt();
+            int m = inputTime.substring(2, 4).toInt();
+            
+            if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+              hours = h;
+              minutes = m;
+              seconds = 0;
+              
+              lcd.clear();
+              lcd.setCursor(0, 0);
+              lcd.print("Time Set!");
+              delay(1500);
+              
+              inputTime = "";
+              currentState = DEFAULT_SCREEN;
+              showDefaultScreen();
+            }
+            else {
+              lcd.setCursor(0, 2);
+              lcd.print("Invalid Time!     ");
+              delay(1500);
+              lcd.setCursor(0, 2);
+              lcd.print("                  ");
+              inputTime = "";
+              lcd.setCursor(6, 1);
+              lcd.print("    ");
+            }
+          }
+          else {
+            lcd.setCursor(0, 2);
+            lcd.print("Enter 4 digits!   ");
+            delay(1500);
+            lcd.setCursor(0, 2);
+            lcd.print("                  ");
+            inputTime = "";
+            lcd.setCursor(6, 1);
+            lcd.print("    ");
+          }
+        }
+        break;
+
       case DEFAULT_SCREEN:
         if (key == 'C') {
           currentState = INPUTS_MENU;
@@ -444,8 +577,12 @@ void loop() {
       }
     }
 
+    // ---------- Dispensing Logic ----------
+    handleDispensing(weight);
+
     // ---------- Check Feeding Times ----------
     checkFeedingTime();
+
 
     // ---------- Display Time ----------
     displayTimeOnLCD();
