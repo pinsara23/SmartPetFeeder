@@ -5,12 +5,16 @@
 #include <ESP32Servo.h>
 
 Servo foodContainerServo;
+Servo measureChamberServo;
 
-const int foodContainerServoPin = 13;
+const int foodContainerServoPin = 33;
+const int measureChamberServoPin = 32;
 
 // ---------------- Servo Angles ----------------
 int servoOpenAngle = 90;
 int servoCloseAngle = 0;
+int measureChamberOpenAngle = 90;
+int measureChamberCloseAngle = 0;
 
 
 // ---------------- LCD Configuration ----------------
@@ -270,14 +274,18 @@ void checkFeedingTime() {
 void handleDispensing(float currentWeight) {
   int currentMinutes = hours * 60 + minutes;
   bool shouldDispense = false;
+  bool measureChamberShouldOpen = false;
   int targetAngle = servoCloseAngle;
 
   // Check if within 2 hours (120 minutes) before feedTime1
   if (feedTime1 >= 0) {
     int diff1 = feedTime1 - currentMinutes;
     if (diff1 < 0) diff1 += 24 * 60;
-    if (diff1 > 0 && diff1 <= 120) {
+    if (diff1 > 60 && diff1 <= 120) {
       shouldDispense = true;
+    }
+    if (diff1 >= 30 && diff1 <= 55) {
+      measureChamberShouldOpen = true;
     }
   }
   
@@ -285,8 +293,11 @@ void handleDispensing(float currentWeight) {
   if (feedTime2 >= 0) {
     int diff2 = feedTime2 - currentMinutes;
     if (diff2 < 0) diff2 += 24 * 60;
-    if (diff2 > 0 && diff2 <= 120) {
+    if (diff2 > 60 && diff2 <= 120) {
       shouldDispense = true;
+    }
+    if (diff2 >= 30 && diff2 <= 55) {
+      measureChamberShouldOpen = true;
     }
   }
 
@@ -315,6 +326,14 @@ void handleDispensing(float currentWeight) {
     foodContainerServo.write(targetAngle);
     currentServoAngle = targetAngle;
   }
+
+  // Handle measureChamberServo logic
+  int targetMeasureChamberAngle = measureChamberShouldOpen ? measureChamberOpenAngle : measureChamberCloseAngle;
+  static int currentMeasureChamberAngle = -1;
+  if (targetMeasureChamberAngle != currentMeasureChamberAngle) {
+    measureChamberServo.write(targetMeasureChamberAngle);
+    currentMeasureChamberAngle = targetMeasureChamberAngle;
+  }
 }
 
 void setup() {
@@ -323,10 +342,13 @@ void setup() {
 
   Wire.begin();
 
-  ESP32PWM::allocateTimer(0);
+  
   //servo attach
   foodContainerServo.attach(foodContainerServoPin, 500, 2400); // Adjust pulse width range if needed
   foodContainerServo.write(servoCloseAngle); // Initially closed
+
+  measureChamberServo.attach(measureChamberServoPin, 500, 2400); // Adjust pulse width range if needed
+  measureChamberServo.write(measureChamberCloseAngle); // Initially closed
 
 
   // LCD Init
