@@ -3,8 +3,15 @@
 #include <Keypad.h>
 #include "HX711.h"
 #include <Adafruit_PWMServoDriver.h>
+#include <SPI.h>
+#include <MFRC522.h>
+
+const int RST_PIN = 15;  // Reset pin for MFRC522
+const int SS_PIN = 5;  // Slave Select pin for MFRC522
 
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
+
+MFRC522 mfrc522(SS_PIN, RST_PIN);  // Create MFRC522 instance
 
 // PCA9685 Channels
 const int foodContainerPin = 0;
@@ -283,15 +290,36 @@ void handleDispensing(float currentWeight) {
   bool measureChamberShouldOpen = false;
   int targetAngle = servoCloseAngle;
 
+  bool rfidDetected = false;
+  if (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial()) {
+    rfidDetected = true;
+    mfrc522.PICC_HaltA();
+    mfrc522.PCD_StopCrypto1();
+  }
+
+  static bool earlyRelease1 = false;
+  static bool earlyRelease2 = false;
+
   // Check if within 2 hours (120 minutes) before feedTime1
   if (feedTime1 >= 0) {
     int diff1 = feedTime1 - currentMinutes;
     if (diff1 < 0) diff1 += 24 * 60;
-    if (diff1 > 60 && diff1 <= 120) {
+    
+    if (diff1 >= 35 && diff1 <= 90) {
       shouldDispense = true;
     }
-    if (diff1 >= 30 && diff1 <= 55) {
-      measureChamberShouldOpen = true;
+    
+    if (diff1 > 30) {
+      earlyRelease1 = false;
+    }
+    
+    if (diff1 >= 0 && diff1 <= 30) {
+      if (rfidDetected) {
+        earlyRelease1 = true;
+      }
+      if (earlyRelease1 || diff1 == 0) {
+        measureChamberShouldOpen = true;
+      }
     }
   }
   
@@ -299,11 +327,22 @@ void handleDispensing(float currentWeight) {
   if (feedTime2 >= 0) {
     int diff2 = feedTime2 - currentMinutes;
     if (diff2 < 0) diff2 += 24 * 60;
-    if (diff2 > 60 && diff2 <= 120) {
+    
+    if (diff2 >= 35 && diff2 <= 90) {
       shouldDispense = true;
     }
-    if (diff2 >= 30 && diff2 <= 55) {
-      measureChamberShouldOpen = true;
+    
+    if (diff2 > 30) {
+      earlyRelease2 = false;
+    }
+    
+    if (diff2 >= 0 && diff2 <= 30) {
+      if (rfidDetected) {
+        earlyRelease2 = true;
+      }
+      if (earlyRelease2 || diff2 == 0) {
+        measureChamberShouldOpen = true;
+      }
     }
   }
 
@@ -367,6 +406,10 @@ void setup() {
   scale.begin(DT, SCK);
 
   scale.tare();
+
+  // RFID Init
+  SPI.begin();
+  mfrc522.PCD_Init();
 
   delay(1000);
 
