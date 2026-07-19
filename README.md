@@ -31,6 +31,10 @@ The firmware is developed using **PlatformIO** and the Arduino framework.
 | **HX711 (Load Cell)** | DT: GPIO 23, SCK: GPIO 26   |
 | **LCD (I2C)**         | SDA, SCL (Default I2C pins) |
 
+## ESP32 Pinout
+
+![ESP32 pinout](esp32_pinout.jpeg)
+
 ## Software Dependencies
 The following libraries are required (automatically managed via `platformio.ini`):
 - `marcoschwartz/LiquidCrystal_I2C`
